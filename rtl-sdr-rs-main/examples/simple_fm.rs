@@ -76,7 +76,8 @@ fn main() {
             // Demodulate data from file
             let result = demod.demodulate(buf.to_vec());
             // Output resulting audio data to stdout
-            output(result);
+
+            // output(result);
         }
     }
 }
@@ -167,11 +168,12 @@ struct DemodConfig {
 /// frequency and sample rate.
 fn optimal_settings(freq: u32, rate: u32) -> (RadioConfig, DemodConfig) {
     let downsample = (1_000_000 / rate) + 1;
+    // let downsample = 20;
     info!("downsample: {}", downsample);
     let capture_rate = downsample * rate;
     info!("rate_in: {} capture_rate: {}", rate, capture_rate);
     // Use offset-tuning
-    let capture_freq = freq + capture_rate / 4;
+    let capture_freq = 100_000_000;//(freq + capture_rate) / 4; 
     info!("capture_freq: {}", capture_freq);
     let mut output_scale = (1 << 15) / (128 * downsample);
     if output_scale < 1 {
@@ -237,13 +239,18 @@ impl Demod {
         let buf_signed: Vec<i16> = buf.iter().map(|val| *val as i16 - 127).collect();
         let complex = buf_to_complex(buf_signed);
         // low-pass filter to downsample to our desired sample rate
-        let lowpassed = self.low_pass_complex(complex);
+        // let lowpassed = self.high_pass_complex(complex);
+        // dbg!(&lowpassed);
 
         // Demodulate FM signal
-        let demodulated = self.fm_demod(lowpassed);
+        // let demodulated = self.fm_demod(lowpassed);
+        let demodulated = self.fm_demod(complex);
+        // dbg!(&demodulated);
 
         // Resample and return result
         let output = self.low_pass_real(demodulated);
+        // dbg!(&output);
+        // panic!();
         output
     }
 
@@ -277,9 +284,9 @@ impl Demod {
             self.lp_now += buf[orig];
 
             self.prev_index += 1;
-            if self.prev_index < self.config.downsample as usize {
-                continue;
-            }
+            // if self.prev_index < self.config.downsample as usize {
+            //     continue;
+            // }
 
             res.push(self.lp_now);
             self.lp_now = Complex::new(0, 0);
@@ -292,13 +299,15 @@ impl Demod {
     /// Applies a high-pass filter on a vector of complex values
     fn high_pass_complex(&mut self, buf: Vec<Complex<i32>>) -> Vec<Complex<i32>> {
         let mut res = vec![];
+        dbg!(&buf.len());
         for orig in 0..buf.len() {
             self.lp_now += buf[orig];
 
+
             self.prev_index += 1;
-            if self.prev_index > self.config.downsample as usize { // je crois que c que ça qu'il fallait fr haaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-                continue;
-            }
+            // if self.prev_index > self.config.downsample as usize { 
+            //     continue;
+            // }
 
             res.push(self.lp_now);
             self.lp_now = Complex::new(0, 0);
@@ -385,7 +394,8 @@ impl Demod {
 /// Write a vector of i16 values to stdout
 fn output(buf: Vec<i16>) {
     use std::{mem, slice};
-    let mut out = std::io::stdout();
+    // let mut out = std::io::stdout();
+    let mut out = std::fs::OpenOptions::new().append(true).create(true).open("truc.wav").unwrap();
     let slice_u8: &[u8] = unsafe {
         slice::from_raw_parts(buf.as_ptr() as *const u8, buf.len() * mem::size_of::<i16>())
     };
